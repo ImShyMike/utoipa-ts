@@ -2,7 +2,7 @@
 //!
 //! [`utoipa-ts`] wraps [`utoipa::path`] with [`path`] so the same endpoint metadata
 //! can be used to generate a TypeScript `Api` type.
-//! 
+//!
 //! [`utoipa-ts`]: https://docs.rs/utoipa-ts/latest/utoipa_ts
 //! [`utoipa::path`]: https://docs.rs/utoipa/latest/utoipa/attr.path.html
 //!
@@ -31,7 +31,7 @@
 //! async fn list_todos() {}
 //!
 //! utoipa_ts::export!("types/api.ts");
-//! 
+//!
 //! fn main() {}
 //! ```
 //!
@@ -67,7 +67,7 @@
 //!
 //! - HTTP method
 //! - `path = "..."`
- //! - `params(...)`
+//! - `params(...)`
 //! - `request_body = Type` and `request_body(content = Type, ...)`
 //! - response status/body pairs
 
