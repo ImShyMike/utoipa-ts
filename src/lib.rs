@@ -87,8 +87,10 @@ impl<'a> EndpointRender<'a> {
 
     pub fn params<T>(&mut self)
     where
-        T: utoipa::IntoParams,
+        T: utoipa::IntoParams + utoipa::ToSchema,
     {
+        self.collector.collect_schema_declarations::<T>();
+
         self.spec.params.extend(
             T::into_params(|| Some(utoipa::openapi::path::ParameterIn::Query))
                 .into_iter()
@@ -230,6 +232,20 @@ impl TypeCollector {
         self.declarations
             .entry(ident)
             .or_insert_with(|| format!("export {}", T::decl(&self.cfg)));
+    }
+
+    fn collect_schema_declarations<T>(&mut self)
+    where
+        T: utoipa::ToSchema,
+    {
+        let mut schemas = Vec::new();
+        T::schemas(&mut schemas);
+
+        for (name, schema) in schemas {
+            self.declarations
+                .entry(name.clone())
+                .or_insert_with(|| render_schema_declaration(&name, &schema));
+        }
     }
 }
 
@@ -434,7 +450,7 @@ fn schema_type_is_nullable(schema_type: &utoipa::openapi::schema::SchemaType) ->
 
 fn schema_to_ts(schema: &utoipa::openapi::schema::Schema) -> String {
     match schema {
-        utoipa::openapi::schema::Schema::Object(object) => schema_type_to_ts(&object.schema_type),
+        utoipa::openapi::schema::Schema::Object(object) => object_to_ts(object),
         utoipa::openapi::schema::Schema::Array(array) => match &array.items {
             utoipa::openapi::schema::ArrayItems::RefOrSchema(item) => {
                 format!("{}[]", schema_ref_to_ts(item))
@@ -461,6 +477,55 @@ fn schema_to_ts(schema: &utoipa::openapi::schema::Schema) -> String {
             .join(" | "),
         _ => "unknown".to_owned(),
     }
+}
+
+fn render_schema_declaration(
+    name: &str,
+    schema: &utoipa::openapi::RefOr<utoipa::openapi::schema::Schema>,
+) -> String {
+    format!(
+        "export type {} = {};",
+        ts_key(name),
+        schema_ref_to_ts(schema)
+    )
+}
+
+fn object_to_ts(object: &utoipa::openapi::schema::Object) -> String {
+    if let Some(enum_values) = &object.enum_values {
+        if enum_values.is_empty() {
+            return "never".to_owned();
+        }
+
+        return enum_values
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(" | ");
+    }
+
+    if !object.properties.is_empty() {
+        let fields = object
+            .properties
+            .iter()
+            .map(|(name, schema)| FieldSpec {
+                name: name.clone(),
+                ty: schema_ref_to_ts(schema),
+                required: object.required.contains(name),
+            })
+            .collect::<Vec<_>>();
+        let mut out = String::new();
+        out.push_str("{\n");
+
+        for field in fields {
+            let optional = if field.required { "" } else { "?" };
+            let _ = writeln!(out, "  {}{}: {};", ts_key(&field.name), optional, field.ty);
+        }
+
+        out.push('}');
+        return out;
+    }
+
+    schema_type_to_ts(&object.schema_type)
 }
 
 fn schema_type_to_ts(schema_type: &utoipa::openapi::schema::SchemaType) -> String {

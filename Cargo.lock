@@ -677,7 +677,7 @@ dependencies = [
 
 [[package]]
 name = "utoipa-ts"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "axum",
  "inventory",
@@ -691,7 +691,7 @@ dependencies = [
 
 [[package]]
 name = "utoipa-ts-macros"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "proc-macro2",
  "quote",

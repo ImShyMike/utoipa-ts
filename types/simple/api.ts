@@ -2,6 +2,8 @@
 
 export type CreateTodo = { title: string, };
 
+export type MediaSize = "small" | "large" | "full" | "original";
+
 export type SearchResults = { todos: Array<Todo>, };
 
 export type Todo = { id: string, title: string, done: boolean, };
@@ -17,6 +19,7 @@ export type Api = {
       is?: number;
       cool?: string;
       wow?: number;
+      size?: null | MediaSize;
     };
     responses: {
       200: SearchResults;

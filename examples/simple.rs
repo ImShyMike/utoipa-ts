@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use utoipa::IntoParams;
 use utoipa::ToSchema;
 
@@ -27,7 +27,7 @@ struct CreateTodo {
     title: String,
 }
 
-#[derive(Debug, Deserialize, IntoParams)]
+#[derive(Debug, Deserialize, IntoParams, ToSchema)]
 struct SearchQuery {
     this: String,
     is: Option<i64>,
@@ -35,6 +35,17 @@ struct SearchQuery {
     cool: Option<String>,
     #[serde(default)]
     wow: i64,
+    #[serde(default)]
+    size: Option<MediaSize>,
+}
+
+#[derive(Debug, Deserialize, Serialize, ToSchema, Clone, Copy)]
+#[serde(rename_all = "lowercase")]
+enum MediaSize {
+    Small,
+    Large,
+    Full,
+    Original,
 }
 
 #[derive(ts_rs::TS, ToSchema)]
