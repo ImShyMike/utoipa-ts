@@ -22,7 +22,7 @@ repository = "https://github.com/ImShyMike/utoipa-ts"
 inventory = "0.3.24"
 ts-rs = "12.0.1"
 utoipa = { version = "5.5.0", features = ["macros"] }
-utoipa-ts-macros = { version = "0.1.0", path = "utoipa-ts-macros" }
+utoipa-ts-macros = { version = "0.1.2", path = "utoipa-ts-macros" }
 
 [dev-dependencies]
 axum = "0.8.9"
