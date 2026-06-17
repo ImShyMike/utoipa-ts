@@ -1,0 +1,16 @@
+[package]
+name = "utoipa-ts-macros"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Procedural macros for utoipa-ts"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0.103"
+quote = "1.0.42"
+syn = { version = "2.0.111", features = ["full", "parsing"] }
