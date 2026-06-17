@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use serde::Deserialize;
+use utoipa::IntoParams;
 use utoipa::ToSchema;
 
 #[derive(ts_rs::TS, ToSchema)]
@@ -25,6 +27,21 @@ struct CreateTodo {
     title: String,
 }
 
+#[derive(Debug, Deserialize, IntoParams)]
+struct SearchQuery {
+    this: String,
+    is: Option<i64>,
+    #[serde(default)]
+    cool: Option<String>,
+    #[serde(default)]
+    wow: i64,
+}
+
+#[derive(ts_rs::TS, ToSchema)]
+struct SearchResults {
+    todos: Vec<Todo>,
+}
+
 #[utoipa_ts::path(
     get,
     path = "/todos",
@@ -33,6 +50,17 @@ struct CreateTodo {
     )
 )]
 async fn list_todos() {}
+
+#[utoipa_ts::path(
+    get,
+    path = "/search",
+    params(SearchQuery),
+    responses(
+        (status = 200, description = "Search results", body = SearchResults),
+        (status = 400, description = "Bad request"),
+    )
+)]
+async fn search_todos() {}
 
 #[utoipa_ts::path(
     post,

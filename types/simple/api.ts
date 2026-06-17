@@ -2,6 +2,8 @@
 
 export type CreateTodo = { title: string, };
 
+export type SearchResults = { todos: Array<Todo>, };
+
 export type Todo = { id: string, title: string, done: boolean, };
 
 export type UpdateUser = { name: string, };
@@ -9,6 +11,18 @@ export type UpdateUser = { name: string, };
 export type User = { id: string, name: string, };
 
 export type Api = {
+  "GET /search": {
+    params: {
+      this: string;
+      is?: number;
+      cool?: string;
+      wow?: number;
+    };
+    responses: {
+      200: SearchResults;
+      400: never;
+    };
+  };
   "GET /todos": {
     responses: {
       200: Array<Todo>;

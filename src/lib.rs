@@ -38,8 +38,9 @@ pub struct EndpointSpec {
 
 #[derive(Debug, Clone)]
 pub struct FieldSpec {
-    pub name: &'static str,
+    pub name: String,
     pub ty: String,
+    pub required: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -78,9 +79,37 @@ impl<'a> EndpointRender<'a> {
         T: ts_rs::TS + 'static,
     {
         self.spec.params.push(FieldSpec {
-            name,
+            name: name.to_owned(),
             ty: self.collector.type_ref::<T>(),
+            required: true,
         });
+    }
+
+    pub fn params<T>(&mut self)
+    where
+        T: utoipa::IntoParams,
+    {
+        self.spec.params.extend(
+            T::into_params(|| Some(utoipa::openapi::path::ParameterIn::Query))
+                .into_iter()
+                .map(|param| {
+                    let nullable = param.schema.as_ref().is_some_and(schema_ref_is_nullable);
+                    let defaulted = param.schema.as_ref().is_some_and(schema_ref_has_default);
+                    let required = matches!(param.required, utoipa::openapi::Required::True)
+                        && !nullable
+                        && !defaulted;
+
+                    FieldSpec {
+                        name: param.name,
+                        ty: param
+                            .schema
+                            .as_ref()
+                            .map(schema_ref_to_ts)
+                            .unwrap_or_else(|| "unknown".to_owned()),
+                        required,
+                    }
+                }),
+        );
     }
 
     pub fn request_body<T>(&mut self)
@@ -321,9 +350,141 @@ fn write_fields_object(out: &mut String, name: &str, fields: &[FieldSpec], inden
 
     let _ = writeln!(out, "{padding}{name}: {{");
     for field in fields {
-        let _ = writeln!(out, "{padding}  {}: {};", ts_key(field.name), field.ty);
+        let optional = if field.required { "" } else { "?" };
+        let _ = writeln!(
+            out,
+            "{padding}  {}{}: {};",
+            ts_key(&field.name),
+            optional,
+            field.ty
+        );
     }
     let _ = writeln!(out, "{padding}}};");
+}
+
+fn schema_ref_to_ts(schema: &utoipa::openapi::RefOr<utoipa::openapi::schema::Schema>) -> String {
+    match schema {
+        utoipa::openapi::RefOr::T(schema) => schema_to_ts(schema),
+        utoipa::openapi::RefOr::Ref(reference) => reference
+            .ref_location
+            .rsplit('/')
+            .next()
+            .filter(|name| !name.is_empty())
+            .unwrap_or("unknown")
+            .to_owned(),
+    }
+}
+
+fn schema_ref_is_nullable(
+    schema: &utoipa::openapi::RefOr<utoipa::openapi::schema::Schema>,
+) -> bool {
+    match schema {
+        utoipa::openapi::RefOr::T(schema) => schema_is_nullable(schema),
+        utoipa::openapi::RefOr::Ref(_) => false,
+    }
+}
+
+fn schema_ref_has_default(
+    schema: &utoipa::openapi::RefOr<utoipa::openapi::schema::Schema>,
+) -> bool {
+    match schema {
+        utoipa::openapi::RefOr::T(schema) => schema_has_default(schema),
+        utoipa::openapi::RefOr::Ref(_) => false,
+    }
+}
+
+fn schema_is_nullable(schema: &utoipa::openapi::schema::Schema) -> bool {
+    match schema {
+        utoipa::openapi::schema::Schema::Object(object) => {
+            schema_type_is_nullable(&object.schema_type)
+        }
+        utoipa::openapi::schema::Schema::OneOf(one_of) => {
+            one_of.items.iter().any(schema_ref_is_nullable)
+        }
+        utoipa::openapi::schema::Schema::AllOf(all_of) => {
+            all_of.items.iter().any(schema_ref_is_nullable)
+        }
+        utoipa::openapi::schema::Schema::AnyOf(any_of) => {
+            any_of.items.iter().any(schema_ref_is_nullable)
+        }
+        _ => false,
+    }
+}
+
+fn schema_has_default(schema: &utoipa::openapi::schema::Schema) -> bool {
+    match schema {
+        utoipa::openapi::schema::Schema::Object(object) => object.default.is_some(),
+        utoipa::openapi::schema::Schema::Array(array) => array.default.is_some(),
+        utoipa::openapi::schema::Schema::OneOf(one_of) => one_of.default.is_some(),
+        utoipa::openapi::schema::Schema::AllOf(all_of) => all_of.default.is_some(),
+        utoipa::openapi::schema::Schema::AnyOf(any_of) => any_of.default.is_some(),
+        _ => false,
+    }
+}
+
+fn schema_type_is_nullable(schema_type: &utoipa::openapi::schema::SchemaType) -> bool {
+    match schema_type {
+        utoipa::openapi::schema::SchemaType::Type(utoipa::openapi::schema::Type::Null) => true,
+        utoipa::openapi::schema::SchemaType::Array(types) => {
+            types.contains(&utoipa::openapi::schema::Type::Null)
+        }
+        _ => false,
+    }
+}
+
+fn schema_to_ts(schema: &utoipa::openapi::schema::Schema) -> String {
+    match schema {
+        utoipa::openapi::schema::Schema::Object(object) => schema_type_to_ts(&object.schema_type),
+        utoipa::openapi::schema::Schema::Array(array) => match &array.items {
+            utoipa::openapi::schema::ArrayItems::RefOrSchema(item) => {
+                format!("{}[]", schema_ref_to_ts(item))
+            }
+            utoipa::openapi::schema::ArrayItems::False => "never[]".to_owned(),
+        },
+        utoipa::openapi::schema::Schema::OneOf(one_of) => one_of
+            .items
+            .iter()
+            .map(schema_ref_to_ts)
+            .collect::<Vec<_>>()
+            .join(" | "),
+        utoipa::openapi::schema::Schema::AllOf(all_of) => all_of
+            .items
+            .iter()
+            .map(schema_ref_to_ts)
+            .collect::<Vec<_>>()
+            .join(" & "),
+        utoipa::openapi::schema::Schema::AnyOf(any_of) => any_of
+            .items
+            .iter()
+            .map(schema_ref_to_ts)
+            .collect::<Vec<_>>()
+            .join(" | "),
+        _ => "unknown".to_owned(),
+    }
+}
+
+fn schema_type_to_ts(schema_type: &utoipa::openapi::schema::SchemaType) -> String {
+    match schema_type {
+        utoipa::openapi::schema::SchemaType::Type(ty) => primitive_type_to_ts(ty).to_owned(),
+        utoipa::openapi::schema::SchemaType::Array(types) => types
+            .iter()
+            .filter(|ty| **ty != utoipa::openapi::schema::Type::Null)
+            .map(primitive_type_to_ts)
+            .collect::<Vec<_>>()
+            .join(" | "),
+        utoipa::openapi::schema::SchemaType::AnyValue => "unknown".to_owned(),
+    }
+}
+
+fn primitive_type_to_ts(ty: &utoipa::openapi::schema::Type) -> &'static str {
+    match ty {
+        utoipa::openapi::schema::Type::Object => "Record<string, unknown>",
+        utoipa::openapi::schema::Type::String => "string",
+        utoipa::openapi::schema::Type::Integer | utoipa::openapi::schema::Type::Number => "number",
+        utoipa::openapi::schema::Type::Boolean => "boolean",
+        utoipa::openapi::schema::Type::Array => "unknown[]",
+        utoipa::openapi::schema::Type::Null => "null",
+    }
 }
 
 fn ts_key(key: &str) -> String {

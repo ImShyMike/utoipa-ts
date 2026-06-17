@@ -30,6 +30,12 @@ fn expand_path(original_args: TokenStream2, args: PathArgs, input: ItemFn) -> To
         }
     });
 
+    let param_sets = args.param_sets.iter().map(|ty| {
+        quote! {
+            endpoint.params::<#ty>();
+        }
+    });
+
     let request_body = args.request_body.iter().map(|ty| {
         quote! {
             endpoint.request_body::<#ty>();
@@ -62,6 +68,7 @@ fn expand_path(original_args: TokenStream2, args: PathArgs, input: ItemFn) -> To
             );
 
             #(#params)*
+            #(#param_sets)*
             #(#request_body)*
             #(#responses)*
 
@@ -83,6 +90,7 @@ struct PathArgs {
     method: Option<String>,
     path: Option<String>,
     params: Vec<Param>,
+    param_sets: Vec<Type>,
     request_body: Option<Type>,
     responses: Vec<Response>,
 }
@@ -93,6 +101,7 @@ impl Parse for PathArgs {
             method: None,
             path: None,
             params: Vec::new(),
+            param_sets: Vec::new(),
             request_body: None,
             responses: Vec::new(),
         };
@@ -121,7 +130,11 @@ impl Parse for PathArgs {
                 parenthesized!(content in input);
 
                 match key.as_str() {
-                    "params" => args.params.extend(parse_params(&content.parse()?)?),
+                    "params" => {
+                        let params = parse_params(&content.parse()?)?;
+                        args.params.extend(params.params);
+                        args.param_sets.extend(params.param_sets);
+                    }
                     "request_body" => args.request_body = parse_request_body(&content.parse()?)?,
                     "responses" => args.responses.extend(parse_responses(&content.parse()?)?),
                     _ => {}
@@ -144,32 +157,38 @@ struct Param {
     ty: Type,
 }
 
-fn parse_params(tokens: &TokenStream2) -> Result<Vec<Param>> {
-    syn::parse2::<ParamList>(tokens.clone()).map(|list| list.params)
+fn parse_params(tokens: &TokenStream2) -> Result<ParamList> {
+    syn::parse2::<ParamList>(tokens.clone())
 }
 
 struct ParamList {
     params: Vec<Param>,
+    param_sets: Vec<Type>,
 }
 
 impl Parse for ParamList {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         let mut params = Vec::new();
+        let mut param_sets = Vec::new();
 
         while !input.is_empty() {
-            let content;
-            parenthesized!(content in input);
+            if input.peek(syn::token::Paren) {
+                let content;
+                parenthesized!(content in input);
 
-            let name: LitStr = content.parse()?;
-            content.parse::<Token![=]>()?;
-            let ty: Type = content.parse()?;
-            params.push(Param {
-                name: name.value(),
-                ty,
-            });
+                let name: LitStr = content.parse()?;
+                content.parse::<Token![=]>()?;
+                let ty: Type = content.parse()?;
+                params.push(Param {
+                    name: name.value(),
+                    ty,
+                });
 
-            while !content.is_empty() {
-                let _: proc_macro2::TokenTree = content.parse()?;
+                while !content.is_empty() {
+                    let _: proc_macro2::TokenTree = content.parse()?;
+                }
+            } else {
+                param_sets.push(input.parse()?);
             }
 
             if input.peek(Token![,]) {
@@ -177,7 +196,7 @@ impl Parse for ParamList {
             }
         }
 
-        Ok(Self { params })
+        Ok(Self { params, param_sets })
     }
 }
 
