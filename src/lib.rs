@@ -309,7 +309,7 @@ macro_rules! export {
     ($path:expr $(,)?) => {
         #[test]
         fn export_api() -> ::std::io::Result<()> {
-            $crate::export_all_from_path_or_env(Some($path))
+            $crate::export_all_from_env_or_path(Some($path))
         }
     };
 }

@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: Rust
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust 1.88
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Run tests
+        run: cargo test --workspace --lib
+
+      - name: Generate simple example TypeScript definitions
+        run: cargo test --example simple export_api
+        env:
+          UTOIPA_TS_PATH: types/simple/api.ts
+
+      - name: Generate axum example TypeScript definitions
+        run: cargo test --example axum export_api
+        env:
+          UTOIPA_TS_PATH: types/axum/api.ts
+
+      - name: Verify generated TypeScript definitions
+        run: |
+          git diff --exit-code -- types
+          test -z "$(git status --porcelain -- types)"
