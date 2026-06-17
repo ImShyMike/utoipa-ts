@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+readme.workspace = true
 description = "Generate TypeScript API definitions from utoipa paths"
 
 [workspace]
@@ -12,17 +13,18 @@ resolver = "3"
 members = ["utoipa-ts-macros"]
 
 [workspace.package]
-version = "0.1.2"
+version = "0.1.3"
 edition = "2024"
 rust-version = "1.88"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/ImShyMike/utoipa-ts"
+readme = "README.md"
 
 [dependencies]
 inventory = "0.3.24"
 ts-rs = "12.0.1"
 utoipa = { version = "5.5.0", features = ["macros"] }
-utoipa-ts-macros = { version = "0.1.2", path = "utoipa-ts-macros" }
+utoipa-ts-macros = { version = "0.1.3", path = "utoipa-ts-macros" }
 
 [dev-dependencies]
 axum = "0.8.9"
