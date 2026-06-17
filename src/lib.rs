@@ -339,7 +339,7 @@ fn render_file(declarations: &BTreeMap<String, String>, endpoints: &[EndpointSpe
         }
 
         if let Some(body) = &endpoint.request_body {
-            let _ = writeln!(out, "    body: {};", body);
+            let _ = writeln!(out, "    body: {body};");
         }
 
         out.push_str("    responses: {\n");
