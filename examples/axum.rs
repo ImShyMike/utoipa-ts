@@ -97,7 +97,7 @@ async fn update_todo(
     Ok(Json(todo.clone()))
 }
 
-utoipa_ts::export!("types/axum"); // same as "types/axum/api.ts"
+utoipa_ts::export!("examples/axum.ts");
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
