@@ -3,7 +3,7 @@
 [![crates.io](https://img.shields.io/crates/v/utoipa-ts.svg?label=crates.io&color=orange&logo=rust)](https://crates.io/crates/utoipa-ts)
 [![docs.rs](https://img.shields.io/static/v1?label=docs.rs&message=utoipa-ts&color=blue&logo=docsdotrs)](https://docs.rs/utoipa-ts/latest/utoipa_ts)
 [![License](https://img.shields.io/crates/l/utoipa-ts.svg?color=green)](https://crates.io/crates/utoipa-ts)
-[![MSRV](https://img.shields.io/static/v1?label=MSRV&message=1.88&color=orange&logo=rust)](ps://crates.io/crates/utoipa-ts)
+[![MSRV](https://img.shields.io/static/v1?label=MSRV&message=1.88&color=orange&logo=rust)](https://crates.io/crates/utoipa-ts)
 
 ## Why?
 

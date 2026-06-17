@@ -7,6 +7,23 @@ use syn::{
     parse_macro_input,
 };
 
+/// Registers a [`utoipa`] endpoint for TypeScript API generation
+///
+/// This macro forwards all arguments to [`utoipa::path`] and additionally records
+/// supported endpoint metadata for [`utoipa_ts::export!`]
+///
+/// [`utoipa`]: https://docs.rs/utoipa/latest/utoipa
+/// [`utoipa::path`]: https://docs.rs/utoipa/latest/utoipa/attr.path.html
+/// [`utoipa_ts::export!`]: https://docs.rs/utoipa-ts/latest/utoipa_ts/macro.export.html
+///
+/// ## Supported metadata
+///
+/// - HTTP method, e.g. `get`, `post`, `put`
+/// - `path = "/..."`
+/// - `params(...)`
+/// - `request_body = Type`
+/// - `request_body(content = Type, ...)`
+/// - `responses((status = 200, body = Type), ...)`
 #[proc_macro_attribute]
 pub fn path(args: TokenStream, item: TokenStream) -> TokenStream {
     let original_args = TokenStream2::from(args.clone());
