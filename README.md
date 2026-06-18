@@ -44,6 +44,28 @@ The export path for `utoipa_ts::export!()` can be chosen with `utoipa_ts::export
 |------------------|-------------------------------------------------------------|------------|
 | `UTOIPA_TS_PATH` | The path where the generated TypeScript file will be saved. | `types.ts` |
 
+## Cargo Features
+
+| Feature          | Description                                                       |
+|------------------|-------------------------------------------------------------------|
+| ts-format        | Enables formatting of the generated TypeScript bindings.          |
+| ts-serde-json    | Add TypeScript support for *serde_json*                           |
+| ts-chrono        | Add TypeScript support for *chrono*                               |
+| ts-bigdecimal    | Add TypeScript support for *bigdecimal*                           |
+| ts-url           | Add TypeScript support for *url*                                  |
+| ts-uuid          | Add TypeScript support for *uuid*                                 |
+| ts-bson-uuid     | Add TypeScript support for *bson::oid::ObjectId* and *bson::uuid* |
+| ts-bytes         | Add TypeScript support for *bytes*                                |
+| ts-indexmap      | Add TypeScript support for *indexmap*                             |
+| ts-ordered-float | Add TypeScript support for *ordered_float*                        |
+| ts-heapless      | Add TypeScript support for *heapless*                             |
+| ts-semver        | Add TypeScript support for *semver*                               |
+| ts-smol_str      | Add TypeScript support for *smol_str*                             |
+| ts-tokio         | Add TypeScript support for *tokio*                                |
+| ts-jiff          | Add TypeScript support for *jiff*                                 |
+| ts-arrayvec      | Add TypeScript support for *arrayvec*                             |
+| ts-astrolabe     | Add TypeScript support for *astrolabe*                            |
+
 ## Examples
 
 ```rust
@@ -117,6 +139,10 @@ export type Api = {
   };
 };
 ```
+
+### More examples
+
+All examples can be found in the [`examples`](./examples) directory.
 
 </details>
 

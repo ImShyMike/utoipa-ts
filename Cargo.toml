@@ -13,7 +13,7 @@ resolver = "3"
 members = ["utoipa-ts-macros"]
 
 [workspace.package]
-version = "0.1.4"
+version = "0.1.5"
 edition = "2024"
 rust-version = "1.88"
 license = "MIT OR Apache-2.0"
@@ -24,10 +24,28 @@ readme = "README.md"
 inventory = "0.3.24"
 ts-rs = "12.0.1"
 utoipa = { version = "5.5.0", features = ["macros"] }
-utoipa-ts-macros = { version = "0.1.4", path = "utoipa-ts-macros" }
+utoipa-ts-macros = { version = "0.1.5", path = "utoipa-ts-macros" }
 
 [dev-dependencies]
 axum = "0.8.9"
 serde = { version = "1.0.228", features = ["derive"] }
 tokio = { version = "1.52.3", features = ["full"] }
 utoipa-axum = "0.2.0"
+
+[features]
+ts-format = ["ts-rs/format"]
+ts-serde-json = ["ts-rs/serde-json-impl"]
+ts-chrono = ["ts-rs/chrono-impl"]
+ts-bigdecimal = ["ts-rs/bigdecimal-impl"]
+ts-url = ["ts-rs/url-impl"]
+ts-uuid = ["ts-rs/uuid-impl"]
+ts-bson-uuid = ["ts-rs/bson-uuid-impl"]
+ts-bytes = ["ts-rs/bytes-impl"]
+ts-indexmap = ["ts-rs/indexmap-impl"]
+ts-ordered-float = ["ts-rs/ordered-float-impl"]
+ts-heapless = ["ts-rs/heapless-impl"]
+ts-semver = ["ts-rs/semver-impl"]
+ts-smol_str = ["ts-rs/smol_str-impl"]
+ts-tokio = ["ts-rs/tokio-impl"]
+ts-jiff = ["ts-rs/jiff-impl"]
+ts-arrayvec = ["ts-rs/arrayvec-impl"]
