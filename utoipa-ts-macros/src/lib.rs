@@ -1,5 +1,5 @@
 use proc_macro::TokenStream;
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{format_ident, quote};
 use syn::{
     Expr, Ident, ItemFn, LitStr, Result, Token, Type, parenthesized,
@@ -20,10 +20,10 @@ use syn::{
 ///
 /// - HTTP method, e.g. `get`, `post`, `put`
 /// - `path = "/..."`
-/// - `params(...)`
+/// - `params(...)`, including parameter location and description metadata
 /// - `request_body = Type`
 /// - `request_body(content = Type, ...)`
-/// - `responses((status = 200, body = Type), ...)`
+/// - `responses((status = 200, body = Type), ...)`, including descriptions, content types, and headers
 #[proc_macro_attribute]
 pub fn path(args: TokenStream, item: TokenStream) -> TokenStream {
     let original_args = TokenStream2::from(args.clone());
@@ -42,8 +42,10 @@ fn expand_path(original_args: TokenStream2, args: PathArgs, input: ItemFn) -> To
     let params = args.params.iter().map(|param| {
         let name = &param.name;
         let ty = &param.ty;
+        let location = param.location.to_tokens();
+        let description = option_string_tokens(param.description.as_deref());
         quote! {
-            endpoint.param::<#ty>(#name);
+            endpoint.param_with_location::<#ty>(#name, #location, #description);
         }
     });
 
@@ -54,20 +56,35 @@ fn expand_path(original_args: TokenStream2, args: PathArgs, input: ItemFn) -> To
     });
 
     let request_body = args.request_body.iter().map(|ty| {
+        let body = &ty.ty;
+        let description = option_string_tokens(ty.description.as_deref());
         quote! {
-            endpoint.request_body::<#ty>();
+            endpoint.request_body_with_description::<#body>(#description);
         }
     });
 
     let responses = args.responses.iter().map(|response| {
         let status = &response.status;
+        let description = option_string_tokens(response.description.as_deref());
+        let content_type = option_string_tokens(response.content_type.as_deref());
+        let headers = response.headers.iter().map(|header| {
+            let name = &header.name;
+            let ty = &header.ty;
+            let description = option_string_tokens(header.description.as_deref());
+            quote! {
+                endpoint.response_header::<#ty>(#status, #name, #description);
+            }
+        });
+
         if let Some(ty) = &response.body {
             quote! {
-                endpoint.response::<#ty>(#status);
+                endpoint.response_with_metadata::<#ty>(#status, #description, #content_type);
+                #(#headers)*
             }
         } else {
             quote! {
-                endpoint.empty_response(#status);
+                endpoint.empty_response_with_metadata(#status, #description, #content_type);
+                #(#headers)*
             }
         }
     });
@@ -108,7 +125,7 @@ struct PathArgs {
     path: Option<String>,
     params: Vec<Param>,
     param_sets: Vec<Type>,
-    request_body: Option<Type>,
+    request_body: Option<RequestBody>,
     responses: Vec<Response>,
 }
 
@@ -136,7 +153,10 @@ impl Parse for PathArgs {
                         args.path = Some(value.value());
                     }
                     "request_body" => {
-                        args.request_body = Some(input.parse()?);
+                        args.request_body = Some(RequestBody {
+                            ty: input.parse()?,
+                            description: None,
+                        });
                     }
                     _ => {
                         let _: Expr = input.parse()?;
@@ -172,6 +192,26 @@ impl Parse for PathArgs {
 struct Param {
     name: String,
     ty: Type,
+    location: ParamLocation,
+    description: Option<String>,
+}
+
+enum ParamLocation {
+    Query,
+    Header,
+    Path,
+    Cookie,
+}
+
+impl ParamLocation {
+    fn to_tokens(&self) -> TokenStream2 {
+        match self {
+            Self::Query => quote!(::utoipa_ts::ParameterLocation::Query),
+            Self::Header => quote!(::utoipa_ts::ParameterLocation::Header),
+            Self::Path => quote!(::utoipa_ts::ParameterLocation::Path),
+            Self::Cookie => quote!(::utoipa_ts::ParameterLocation::Cookie),
+        }
+    }
 }
 
 fn parse_params(tokens: &TokenStream2) -> Result<ParamList> {
@@ -196,14 +236,43 @@ impl Parse for ParamList {
                 let name: LitStr = content.parse()?;
                 content.parse::<Token![=]>()?;
                 let ty: Type = content.parse()?;
+                let mut location = ParamLocation::Path;
+                let mut description = None;
+
+                while !content.is_empty() {
+                    if content.peek(Token![,]) {
+                        content.parse::<Token![,]>()?;
+                        continue;
+                    }
+
+                    if content.peek(Ident) {
+                        let key: Ident = content.parse()?;
+                        match key.to_string().as_str() {
+                            "Query" => location = ParamLocation::Query,
+                            "Header" => location = ParamLocation::Header,
+                            "Path" => location = ParamLocation::Path,
+                            "Cookie" => location = ParamLocation::Cookie,
+                            "description" if content.peek(Token![=]) => {
+                                content.parse::<Token![=]>()?;
+                                description = Some(parse_string_value(&content)?);
+                            }
+                            _ if content.peek(Token![=]) => {
+                                content.parse::<Token![=]>()?;
+                                let _ = parse_until_comma(&content)?;
+                            }
+                            _ => {}
+                        }
+                    } else {
+                        let _: proc_macro2::TokenTree = content.parse()?;
+                    }
+                }
+
                 params.push(Param {
                     name: name.value(),
                     ty,
+                    location,
+                    description,
                 });
-
-                while !content.is_empty() {
-                    let _: proc_macro2::TokenTree = content.parse()?;
-                }
             } else {
                 param_sets.push(input.parse()?);
             }
@@ -220,19 +289,40 @@ impl Parse for ParamList {
 struct Response {
     status: String,
     body: Option<Type>,
+    content_type: Option<String>,
+    headers: Vec<ResponseHeader>,
+    description: Option<String>,
 }
 
-fn parse_request_body(tokens: &TokenStream2) -> Result<Option<Type>> {
-    syn::parse2::<RequestBody>(tokens.clone()).map(|body| body.ty)
+struct ResponseHeader {
+    name: String,
+    ty: Type,
+    description: Option<String>,
+}
+
+fn parse_request_body(tokens: &TokenStream2) -> Result<Option<RequestBody>> {
+    syn::parse2::<RequestBodyParser>(tokens.clone()).map(|body| {
+        body.ty.map(|ty| RequestBody {
+            ty,
+            description: body.description,
+        })
+    })
 }
 
 struct RequestBody {
-    ty: Option<Type>,
+    ty: Type,
+    description: Option<String>,
 }
 
-impl Parse for RequestBody {
+struct RequestBodyParser {
+    ty: Option<Type>,
+    description: Option<String>,
+}
+
+impl Parse for RequestBodyParser {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         let mut ty = None;
+        let mut description = None;
 
         while !input.is_empty() {
             let key: Ident = input.parse()?;
@@ -240,6 +330,8 @@ impl Parse for RequestBody {
 
             if key == "content" {
                 ty = Some(input.parse()?);
+            } else if key == "description" {
+                description = Some(parse_string_value(input)?);
             } else {
                 let _ = parse_until_comma(input)?;
             }
@@ -249,7 +341,7 @@ impl Parse for RequestBody {
             }
         }
 
-        Ok(Self { ty })
+        Ok(Self { ty, description })
     }
 }
 
@@ -283,20 +375,40 @@ impl Parse for Response {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         let mut status = None;
         let mut body = None;
+        let mut content_type = None;
+        let mut headers = Vec::new();
+        let mut description = None;
 
         while !input.is_empty() {
             let key: Ident = input.parse()?;
-            input.parse::<Token![=]>()?;
 
             match key.to_string().as_str() {
                 "status" => {
+                    input.parse::<Token![=]>()?;
                     let tokens = parse_until_comma(input)?;
                     status = Some(status_tokens_to_string(tokens));
                 }
                 "body" => {
+                    input.parse::<Token![=]>()?;
                     body = Some(input.parse()?);
                 }
+                "content_type" => {
+                    input.parse::<Token![=]>()?;
+                    content_type = parse_optional_string_literal(input)?;
+                }
+                "headers" if input.peek(syn::token::Paren) => {
+                    let content;
+                    parenthesized!(content in input);
+                    headers.extend(syn::parse2::<ResponseHeaderList>(content.parse()?)?.headers);
+                }
+                "description" => {
+                    input.parse::<Token![=]>()?;
+                    description = Some(parse_string_value(input)?);
+                }
                 _ => {
+                    if input.peek(Token![=]) {
+                        input.parse::<Token![=]>()?;
+                    }
                     let _ = parse_until_comma(input)?;
                 }
             }
@@ -309,8 +421,105 @@ impl Parse for Response {
         Ok(Self {
             status: status.unwrap_or_else(|| "default".to_owned()),
             body,
+            content_type,
+            headers,
+            description,
         })
     }
+}
+
+struct ResponseHeaderList {
+    headers: Vec<ResponseHeader>,
+}
+
+impl Parse for ResponseHeaderList {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        let mut headers = Vec::new();
+
+        while !input.is_empty() {
+            let content;
+            parenthesized!(content in input);
+            headers.push(content.parse()?);
+
+            if input.peek(Token![,]) {
+                input.parse::<Token![,]>()?;
+            }
+        }
+
+        Ok(Self { headers })
+    }
+}
+
+impl Parse for ResponseHeader {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        let name: LitStr = input.parse()?;
+        let mut ty = syn::parse_str::<Type>("String")?;
+        let mut description = None;
+
+        if input.peek(Token![=]) {
+            input.parse::<Token![=]>()?;
+            ty = input.parse()?;
+        }
+
+        while !input.is_empty() {
+            if input.peek(Token![,]) {
+                input.parse::<Token![,]>()?;
+                continue;
+            }
+
+            if input.peek(Ident) {
+                let key: Ident = input.parse()?;
+                match key.to_string().as_str() {
+                    "description" if input.peek(Token![=]) => {
+                        input.parse::<Token![=]>()?;
+                        description = Some(parse_string_value(input)?);
+                    }
+                    _ if input.peek(Token![=]) => {
+                        input.parse::<Token![=]>()?;
+                        let _ = parse_until_comma(input)?;
+                    }
+                    _ => {}
+                }
+            } else {
+                let _: proc_macro2::TokenTree = input.parse()?;
+            }
+        }
+
+        Ok(Self {
+            name: name.value(),
+            ty,
+            description,
+        })
+    }
+}
+
+fn parse_optional_string_literal(input: ParseStream<'_>) -> Result<Option<String>> {
+    if input.peek(LitStr) {
+        let value: LitStr = input.parse()?;
+        Ok(Some(value.value()))
+    } else {
+        let _ = parse_until_comma(input)?;
+        Ok(None)
+    }
+}
+
+fn parse_string_value(input: ParseStream<'_>) -> Result<String> {
+    if input.peek(LitStr) {
+        let value: LitStr = input.parse()?;
+        Ok(value.value())
+    } else {
+        Ok(parse_until_comma(input)?.to_string())
+    }
+}
+
+fn option_string_tokens(value: Option<&str>) -> TokenStream2 {
+    value.map_or_else(
+        || quote!(None),
+        |value| {
+            let value = LitStr::new(value, Span::call_site());
+            quote!(Some(#value))
+        },
+    )
 }
 
 fn parse_until_comma(input: ParseStream<'_>) -> Result<TokenStream2> {

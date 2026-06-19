@@ -110,6 +110,6 @@ async fn get_user() {}
 )]
 async fn update_user() {}
 
-utoipa_ts::export!("examples/simple.ts");
+utoipa_ts::export!("examples/simple.d.ts");
 
 fn main() {}
